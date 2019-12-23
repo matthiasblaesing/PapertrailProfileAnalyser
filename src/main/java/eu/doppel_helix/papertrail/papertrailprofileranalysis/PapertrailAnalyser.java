@@ -62,17 +62,39 @@ public class PapertrailAnalyser {
         if (namespace.<Boolean>get("gui")) {
             PapertrailUI.start(file, selectedCharset);
         } else {
-            if (file == null) {
-                parser.handleError(new ArgumentParserException("file must be specified when run on CLI", parser));
-                System.exit(1);
+            parseCLI(parser, file, selectedCharset);
+        }
+    }
+
+    @SuppressWarnings("UseOfSystemOutOrSystemErr")
+    private static void parseCLI(ArgumentParser parser, File file, Charset selectedCharset) {
+        if (file == null) {
+            parser.handleError(new ArgumentParserException("file must be specified when run on CLI", parser));
+            System.exit(1);
+        }
+        try {
+            PapertrailParser papertrailParser = new PapertrailParser(file.toPath(), selectedCharset);
+            StackTraceElementNode root = StackTraceSummarizer.summarize(papertrailParser);
+            for(StackTraceElementNode child: root.getChildren()) {
+                printNode(child, "");
             }
-            try {
-                PapertrailParser papertrailParser = new PapertrailParser(file.toPath(), selectedCharset);
-                System.out.println(papertrailParser);
-            } catch (IOException ex) {
-                System.err.printf("Failed to parse file %s with charset %s%n%n", file, selectedCharset);
-                ex.printStackTrace(System.err);
-                System.exit(1);
+        } catch (IOException ex) {
+            System.err.printf("Failed to parse file %s with charset %s%n%n", file, selectedCharset);
+            ex.printStackTrace(System.err);
+            System.exit(1);
+        }
+    }
+
+    private static void printNode(StackTraceElementNode sten, String indent) {
+        System.out.printf("%s+ [% 5d/% 5d] %s%n", indent, sten.getCount(), sten.getTotal(), sten.getLocation());
+        String newIndent = indent + "|  ";
+        String lastIndent = indent + "   ";
+        StackTraceElementNode parent = sten.getParent();
+        for(int i = 0; i < sten.getChildCount(); i++) {
+            if(parent.getIndex(sten) == (parent.getChildCount() - 1)) {
+                printNode(sten.getChildAt(i), lastIndent);
+            } else {
+                printNode(sten.getChildAt(i), newIndent);
             }
         }
     }

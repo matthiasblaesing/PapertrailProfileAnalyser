@@ -286,48 +286,7 @@ public class PapertrailUI extends javax.swing.JFrame {
         new SwingWorker<StackTraceElementNode, Object>() {
             @Override
             protected StackTraceElementNode doInBackground() throws Exception {
-                StackTraceElementNode rootNode = new StackTraceElementNode();
-                rootNode.setLocation("<>");
-                rootNode.setCount(0);
-                rootNode.setTotal(0);
-                PapertrailParser pp = PapertrailUI.this.parser;
-                if (pp == null) {
-                    return rootNode;
-                }
-                int total = 0;
-                for (StackTrace st : pp.getStackTraces()) {
-                    total += st.getCount();
-                }
-                rootNode.setCount(total);
-                rootNode.setTotal(total);
-                for (StackTrace st : pp.getStackTraces()) {
-                    ArrayList<String> elements = new ArrayList<>(st.getTraceElements());
-                    Collections.reverse(elements);
-                    addTrace(rootNode, elements, st.getCount(), total);
-                }
-                rootNode.sortChildren((s1, s2) -> Long.signum(s2.getCount() - s1.getCount()), true);
-                return rootNode;
-            }
-
-            private void addTrace(StackTraceElementNode parent, List<String> remainingTrace, long count, long total) {
-                String currentLocation = remainingTrace.get(0);
-                StackTraceElementNode currentNode = null;
-                for(StackTraceElementNode child: parent.getChildren()) {
-                    if(child.getLocation().equals(currentLocation)) {
-                        currentNode = child;
-                        break;
-                    }
-                }
-                if(currentNode == null) {
-                    currentNode = new StackTraceElementNode();
-                    currentNode.setLocation(currentLocation);
-                    currentNode.setTotal(total);
-                    parent.add(currentNode);
-                }
-                currentNode.setCount(currentNode.getCount() + count);
-                if(remainingTrace.size() > 1) {
-                    addTrace(currentNode, remainingTrace.subList(1, remainingTrace.size()), count, total);
-                }
+                return StackTraceSummarizer.summarize(parser);
             }
 
             @Override
@@ -378,13 +337,6 @@ public class PapertrailUI extends javax.swing.JFrame {
             openFile(fileChooser.getSelectedFile(), (Charset) charsetComboBox.getSelectedItem());
         }
     }//GEN-LAST:event_openfileActionPerformed
-
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String args[]) {
-        start(null, StandardCharsets.UTF_8);
-    }
 
     public static void start(final File filePath, final Charset charset) {
         java.awt.EventQueue.invokeLater(new Runnable() {
