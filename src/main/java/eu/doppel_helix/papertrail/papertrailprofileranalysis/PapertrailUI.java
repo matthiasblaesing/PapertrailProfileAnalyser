@@ -280,7 +280,7 @@ public class PapertrailUI extends javax.swing.JFrame {
         if (parser != null) {
             ArrayList<StackTrace> traces = new ArrayList<>(parser.getStackTraces());
             Collections.sort(traces, (s1, s2) -> Long.signum(s2.getCount() - s1.getCount()));
-            stacktraceSelectionModel.addAll(traces);
+            traces.stream().forEachOrdered(trace -> stacktraceSelectionModel.addElement(trace));
             stacktraceSelectionModel.setSelectedItem(traces.get(0));
         }
         new SwingWorker<StackTraceElementNode, Object>() {
