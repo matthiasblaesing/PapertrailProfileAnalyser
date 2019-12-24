@@ -57,10 +57,18 @@
                 <groupId>de.jutzig</groupId>
                 <artifactId>github-release-plugin</artifactId>
                 <version>1.1.1</version>
+                <executions>
+                    <execution>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>release</goal>
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
                     <description />
-                    <releaseName>${project.version}</releaseName>
-                    <tag>${project.version}</tag>
+                    <releaseName>${project.artifactId}-${project.version}</releaseName>
+                    <tag>${project.artifactId}-${project.version}</tag>
                     <fileSets>
                         <fileSet>
                             <directory>${project.build.directory}</directory>
