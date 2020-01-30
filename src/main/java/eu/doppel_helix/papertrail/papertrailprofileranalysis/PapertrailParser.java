@@ -154,7 +154,7 @@ public class PapertrailParser {
 
         while(true) {
             if(Arrays.equals(newLineSearch, newLine)) {
-                return baos.toString(charsetOfData);
+                return baos.toString(charsetOfData.name());
             }
 
             int readByte = is.read();
