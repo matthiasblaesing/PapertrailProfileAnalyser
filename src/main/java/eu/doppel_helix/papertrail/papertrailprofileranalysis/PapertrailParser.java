@@ -16,16 +16,13 @@
 
 package eu.doppel_helix.papertrail.papertrailprofileranalysis;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,8 +42,12 @@ public class PapertrailParser {
     private String binary;
     private final Map<Long,String> symbolMap = new HashMap<>();
     private final List<StackTrace> stackTraces = new ArrayList<>();
+    private final byte[] newLine;
 
     public PapertrailParser(Path input, Charset charsetOfData) throws IOException {
+        ByteBuffer newLineBuffer = charsetOfData.encode("\n");
+        newLine = new byte[newLineBuffer.capacity()];
+        newLineBuffer.get(newLine);
 	this.charsetOfData = charsetOfData;
 	this.input = input;
 	parse();
@@ -65,22 +66,20 @@ public class PapertrailParser {
     }
 
     private void parse() throws IOException {
-	try (InputStream is = Files.newInputStream(input, StandardOpenOption.READ);
-		InputStreamReader r = new InputStreamReader(is, charsetOfData);
-		BufferedReader isr = new BufferedReader(r)) {
+        try (InputStream is0 = Files.newInputStream(input, StandardOpenOption.READ)) {
 	    String line;
-	    line = readLine(isr);
+	    line = readLine(is0);
 	    if(! "--- symbol".equals(line)) {
 		throw new IOException(String.format("Expected '--- symbol', got \n'%s'", line.substring(0, Math.min(line.length(), 128))));
 	    }
-	    line = readLine(isr);
+	    line = readLine(is0);
 	    if(! line.startsWith("binary=")) {
 		throw new IOException(String.format("Expected line to start with 'binary=', got '%s'", line));
 	    } else {
 		binary = line.substring(7);
 	    }
 	    while(true) {
-		line = readLine(isr);
+		line = readLine(is0);
 		if("---".equals(line)) {
 		    break;
 		} else {
@@ -91,28 +90,30 @@ public class PapertrailParser {
 		    symbolMap.put(Long.valueOf(matcher.group(1), 16), matcher.group(2));
 		}
 	    }
-	    line = readLine(isr);
+	    line = readLine(is0);
 	    if(! "--- profile".equals(line)) {
 		throw new IOException(String.format("Expected '--- profile', got '%s'", line));
 	    }
-	    long[] startSignature = readLongArray(isr, 5);
+
+	    long[] startSignature = readLongArray(is0, 5);
 	    if(!Arrays.equals(START_MARKER, startSignature)) {
 		throw new IOException(String.format("Expected start marker '%s', got '%s'", Arrays.toString(START_MARKER), Arrays.toString(startSignature)));
 	    }
 
+
+
 	    ArrayList<StackTrace> data = new ArrayList<>();
 	    do {
-		int count = (int) readLong(isr);
-		int depth = (int) readLong(isr);
-		isr.mark(8);
-		long eofMark = (int) readLong(isr);
-		isr.reset();
+		int count = (int) readLong(is0);
+		int depth = (int) readLong(is0);
+		long eofMark = (int) readLong(is0);
 		if(count == 0 && depth == 1 && eofMark == 0) {
 		    this.stackTraces.addAll(data);
 		    return;
 		} else {
-		    long[] refs = readLongArray(isr, depth);
+		    long[] refs = readLongArray(is0, depth - 1);
 		    List<String> trace = new ArrayList<>(depth);
+                    trace.add(symbolMap.get(eofMark));
 		    for(long ref: refs) {
                         String steLine = symbolMap.get(ref);
                         if(trace.isEmpty() || (! trace.get(trace.size() - 1).equals(steLine))) {
@@ -126,7 +127,7 @@ public class PapertrailParser {
 	}
     }
 
-    private long readLong(final Reader isr) throws IOException {
+    private long readLong(final InputStream isr) throws IOException {
 	long result = (isr.read() & 0xFFL);
 	result |= (isr.read() & 0xFFL) << 8;
 	result |= (isr.read() & 0xFFL) << 16;
@@ -138,7 +139,7 @@ public class PapertrailParser {
 	return result;
     }
 
-    private long[] readLongArray(final Reader isr, int count) throws IOException {
+    private long[] readLongArray(final InputStream isr, int count) throws IOException {
 	long[] result = new long[(int) count];
 	for(int i = 0; i < count; i++) {
 	    result[i] = readLong(isr);
@@ -146,17 +147,36 @@ public class PapertrailParser {
 	return result;
     }
 
-    private String readLine(final Reader isr) throws IOException {
-	StringBuilder sb = new StringBuilder();
-	int cur;
-	while(true) {
-	    cur = isr.read();
-	    if(cur == -1 || cur == '\n') {
-		break;
-	    } else {
-		sb.append((char) cur);
-	    }
-	}
-	return sb.toString();
+    private String readLine(final InputStream is) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] newLineSearch = new byte[newLine.length];
+        readFully(newLineSearch, is);
+
+        while(true) {
+            if(Arrays.equals(newLineSearch, newLine)) {
+                return baos.toString(charsetOfData);
+            }
+
+            int readByte = is.read();
+
+            if (readByte < 0) {
+                throw new IOException("Reached EOF while looking for EOL");
+            }
+
+            baos.write(newLineSearch[0]);
+            System.arraycopy(newLineSearch, 1, newLineSearch, 0, newLineSearch.length - 1);
+            newLineSearch[newLineSearch.length - 1] = (byte) readByte;
+        }
+    }
+
+    private void readFully(byte[] target, InputStream source) throws IOException {
+        int read = 0;
+        do {
+            int currentRead = source.read(target, read, target.length - read);
+            read += currentRead;
+            if(currentRead < 0) {
+                throw new IOException("No bytes left in stream");
+            }
+        } while( read < target.length );
     }
 }
