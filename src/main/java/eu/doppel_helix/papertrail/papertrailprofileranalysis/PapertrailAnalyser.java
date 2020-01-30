@@ -53,16 +53,16 @@ public class PapertrailAnalyser {
             .metavar("file")
             .help("File to parse as papertrail profiler file (pprof)")
             .type(File.class);
-        parser.addArgument("-g", "--gui")
-            .dest("gui")
+        parser.addArgument("-t", "--text")
+            .dest("textOutput")
             .action(Arguments.storeTrue());
         Namespace namespace = parser.parseArgsOrFail(argv);
         Charset selectedCharset = namespace.<Charset>get("charset");
         File file = namespace.<File>get("file");
-        if (namespace.<Boolean>get("gui")) {
-            PapertrailUI.start(file, selectedCharset);
-        } else {
+        if (namespace.<Boolean>get("textOutput")) {
             parseCLI(parser, file, selectedCharset);
+        } else {
+            PapertrailUI.start(file, selectedCharset);
         }
     }
 
