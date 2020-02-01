@@ -49,7 +49,7 @@ public final class StackTraceElementTreeElementRenderer implements TreeCellRende
             progressBar.setMaximum((int) ste.getTotal());
             progressBar.setMinimum(0);
             progressBar.setValue((int) ste.getCount());
-            progressBar.setString(String.format("[%d / %d]", ste.getCount(), ste.getTotal()));
+            progressBar.setString(String.format("[%d / %d] (%d)", ste.getCount(), ste.getTotal(), ste.getSelfCount()));
             defaultRenderer.getTreeCellRendererComponent(tree, ste.getLocation(), sel, expanded, leaf, row, hasFocus);
         }
         defaultRenderer.setSize(defaultRenderer.getPreferredSize());

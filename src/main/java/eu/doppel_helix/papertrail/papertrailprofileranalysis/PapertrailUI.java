@@ -30,7 +30,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -43,10 +44,10 @@ import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
@@ -59,12 +60,8 @@ public class PapertrailUI extends javax.swing.JFrame {
     private static final Logger LOG = Logger.getLogger(PapertrailUI.class.getName());
     private PapertrailParser parser;
     private DefaultComboBoxModel<StackTrace> stacktraceSelectionModel = new DefaultComboBoxModel<>();
-    private DefaultTableModel stacktraceModel = new DefaultTableModel(new String[]{"Method"}, 0) {
-        @Override
-        public boolean isCellEditable(int row, int column) {
-            return false;
-        }
-    };
+    private StackTraceTableModel stacktraceModel = new StackTraceTableModel();
+    private HotMethodTableModel hotMethodTableModel = new HotMethodTableModel();
     private DefaultTreeModel calltreeModel = new DefaultTreeModel(new StackTraceElementNode());
 
     /**
@@ -85,11 +82,7 @@ public class PapertrailUI extends javax.swing.JFrame {
         });
         stacktraceSelector.setModel(stacktraceSelectionModel);
         stacktraceSelector.addActionListener(l -> {
-            StackTrace selected = (StackTrace) stacktraceSelector.getSelectedItem();
-            stacktraceModel.setRowCount(0);
-            if (selected != null) {
-                selected.getTraceElements().stream().forEachOrdered(s -> stacktraceModel.addRow(new Object[]{s}));
-            }
+            stacktraceModel.setStackTrace((StackTrace) stacktraceSelector.getSelectedItem());
         });
         this.addWindowListener(new WindowAdapter() {
             @Override
@@ -127,6 +120,7 @@ public class PapertrailUI extends javax.swing.JFrame {
         calltreeTree.setRootVisible(false);
         calltreeTree.setShowsRootHandles(true);
         calltreeTree.setCellRenderer(new StackTraceElementTreeElementRenderer());
+        hotMethodTable.setModel(hotMethodTableModel);
     }
 
     private void toggleExpandRecursive(JTree tree, TreePath tp) {
@@ -165,6 +159,9 @@ public class PapertrailUI extends javax.swing.JFrame {
         calltreePanel = new javax.swing.JPanel();
         calltreeWrapper = new javax.swing.JScrollPane();
         calltreeTree = new javax.swing.JTree();
+        hotMethodPanel = new javax.swing.JPanel();
+        hotMethodWrapper = new javax.swing.JScrollPane();
+        hotMethodTable = new javax.swing.JTable();
         jMenuBar1 = new javax.swing.JMenuBar();
         fileMenu = new javax.swing.JMenu();
         openfile = new javax.swing.JMenuItem();
@@ -213,6 +210,26 @@ public class PapertrailUI extends javax.swing.JFrame {
         calltreePanel.add(calltreeWrapper, java.awt.BorderLayout.CENTER);
 
         analysisPanels.addTab("Calltree", calltreePanel);
+
+        hotMethodPanel.setLayout(new java.awt.BorderLayout());
+
+        hotMethodTable.setAutoCreateRowSorter(true);
+        hotMethodTable.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null},
+                {null, null, null, null}
+            },
+            new String [] {
+                "Title 1", "Title 2", "Title 3", "Title 4"
+            }
+        ));
+        hotMethodWrapper.setViewportView(hotMethodTable);
+
+        hotMethodPanel.add(hotMethodWrapper, java.awt.BorderLayout.CENTER);
+
+        analysisPanels.addTab("Hot Methods", hotMethodPanel);
 
         getContentPane().add(analysisPanels, java.awt.BorderLayout.CENTER);
 
@@ -286,20 +303,31 @@ public class PapertrailUI extends javax.swing.JFrame {
         new SwingWorker<StackTraceElementNode, Object>() {
             @Override
             protected StackTraceElementNode doInBackground() throws Exception {
-                return StackTraceSummarizer.summarize(parser);
+                StackTraceElementNode sten = StackTraceSummarizer.summarize(parser);
+                Map<String,HotMethodElement> hotMethod = new HashMap<>();
+                hotMethodSummarizer(sten, hotMethod);
+                SwingUtilities.invokeLater(() -> calltreeModel.setRoot(sten));
+                SwingUtilities.invokeLater(() -> hotMethodTableModel.setElements(hotMethod.values()));
+                return null;
             }
 
             @Override
             protected void done() {
-                try {
-                    calltreeModel.setRoot(get());
-                } catch (Exception ex) {
-                    LOG.log(Level.SEVERE, null, ex);
-                }
             }
-
         }.execute();
+    }
 
+    private static void hotMethodSummarizer(StackTraceElementNode sten, Map<String,HotMethodElement> hotMethodElements) {
+        HotMethodElement hme = hotMethodElements.get(sten.getLocation());
+        if(hme == null) {
+            hme = new HotMethodElement(sten.getLocation());
+            hotMethodElements.put(hme.getLocation(), hme);
+        }
+        hme.setSelfTime(sten.getSelfCount() + hme.getSelfTime());
+        hme.setTotalTime(sten.getCount() + hme.getTotalTime());
+        for(StackTraceElementNode childSten: sten.getChildren()) {
+            hotMethodSummarizer(childSten, hotMethodElements);
+        }
     }
 
     private static File lastLocation = null;
@@ -357,6 +385,9 @@ public class PapertrailUI extends javax.swing.JFrame {
     private javax.swing.JScrollPane calltreeWrapper;
     private javax.swing.JMenuItem exit;
     private javax.swing.JMenu fileMenu;
+    private javax.swing.JPanel hotMethodPanel;
+    private javax.swing.JTable hotMethodTable;
+    private javax.swing.JScrollPane hotMethodWrapper;
     private javax.swing.JMenuBar jMenuBar1;
     private javax.swing.JMenuItem openfile;
     private javax.swing.JPanel stacktraceList;

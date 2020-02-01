@@ -29,6 +29,7 @@ public class StackTraceElementNode implements TreeNode {
     private String location = "";
     private long count = 0;
     private long total = 0;
+    private long self = 0;
 
     @Override
     public Enumeration<? extends TreeNode> children() {
@@ -95,6 +96,14 @@ public class StackTraceElementNode implements TreeNode {
 
     public void setTotal(long total) {
         this.total = total;
+    }
+
+    public long getSelfCount() {
+        long childCount = 0;
+        for(StackTraceElementNode sten: children) {
+            childCount += sten.getCount();
+        }
+        return getCount() - childCount;
     }
 
     public void add(StackTraceElementNode ste) {
